@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/CloudPose/static/css/main.64ca39be.css",
+    "main.js": "/CloudPose/static/js/main.8e385dad.js",
+    "static/js/453.670e15c7.chunk.js": "/CloudPose/static/js/453.670e15c7.chunk.js",
+    "index.html": "/CloudPose/index.html",
+    "main.64ca39be.css.map": "/CloudPose/static/css/main.64ca39be.css.map",
+    "main.8e385dad.js.map": "/CloudPose/static/js/main.8e385dad.js.map",
+    "453.670e15c7.chunk.js.map": "/CloudPose/static/js/453.670e15c7.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.64ca39be.css",
+    "static/js/main.8e385dad.js"
+  ]
+}
