@@ -23,6 +23,10 @@ CloudPose/
 ├── app/                     # Main application code
 │   ├── app.py              # FastAPI web service
 │   └── requirements.txt    # Python dependencies
+├── frontend/               # React frontend application
+│   ├── src/                # React source code
+│   ├── public/             # Static files
+│   └── package.json        # Frontend dependencies
 ├── k8s/                    # Kubernetes configurations
 │   ├── deployment.yaml     # Pod deployment configuration
 │   └── service.yaml        # Service configuration
@@ -41,6 +45,7 @@ CloudPose/
 ### Prerequisites
 
 - Python 3.9+
+- Node.js (v14 or higher) - for frontend
 - Docker
 - Kubernetes cluster (OCI)
 - Locust (for load testing)
@@ -63,6 +68,24 @@ curl -X POST "http://localhost:60000/api/pose" \
   -H "Content-Type: application/json" \
   -d '{"image": "base64_encoded_image", "id": "test-123"}'
 ```
+
+### Frontend Development
+
+1. Install frontend dependencies:
+```bash
+cd frontend
+npm install
+```
+
+2. Start the React development server:
+```bash
+npm start
+```
+
+3. Open your browser:
+Navigate to `http://localhost:3000`
+
+4. Upload an image and test both endpoints through the UI!
 
 ### Docker Build
 
