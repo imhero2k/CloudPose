@@ -226,18 +226,3 @@ kubectl logs -f deployment/pose-estimator -n assignment1
 # Service logs
 kubectl describe service pose-estimator-service -n assignment1
 ```
-
-## Contributing
-
-This is a FIT5225 assignment submission. Please refer to the assignment specifications for requirements and evaluation criteria.
-
-## License
-
-This project is created for educational purposes as part of FIT5225 Cloud Computing course.
-
----
-
-**Student**: [Your Name]  
-**Student ID**: [Your Student ID]  
-**Tutor**: [Your Tutor Name]  
-**Course**: FIT5225 Cloud Computing - Semester 1, 2025 
