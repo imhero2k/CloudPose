@@ -54,7 +54,7 @@ function App() {
         file_name: selectedImage.name
       };
 
-      const response = await fetch('http://YOUR_ORACLE_VM_IP:60000/api/pose', {
+      const response = await fetch('http://152.69.179.232:8000/api/pose', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -93,7 +93,7 @@ function App() {
         file_name: selectedImage.name
       };
 
-      const response = await fetch('http://YOUR_ORACLE_VM_IP:60000/api/pose/annotated', {
+      const response = await fetch('http://152.69.179.232:8000/api/pose/annotated', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
