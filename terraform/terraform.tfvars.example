@@ -1,0 +1,10 @@
+aws_region          = "ap-southeast-2"
+project_name        = "cloudpose"
+cluster_version     = "1.31"
+node_instance_type  = "t3.large"
+node_desired_size   = 2
+namespace           = "cloudpose"
+api_replicas        = 1
+api_cpu             = "1"
+api_memory          = "2Gi"
+image_tag           = "latest"

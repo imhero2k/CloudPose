@@ -133,6 +133,20 @@ CI=true npm test -- --watchAll=false
 
 GitHub Actions workflow `.github/workflows/ci.yml` runs both suites on pushes and pull requests.
 
+### Amazon EKS
+
+Terraform under `terraform/` stands up EKS, ECR, the pose API, and an nginx frontend with an NLB. See [`terraform/README.md`](./terraform/README.md).
+
+```bash
+cd terraform
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+terraform apply -target=aws_eks_cluster.this -target=aws_eks_node_group.this \
+  -target=aws_ecr_repository.api -target=aws_ecr_repository.frontend
+../scripts/push-ecr.sh
+terraform apply
+```
+
 ### Docker Build
 
 ```bash
