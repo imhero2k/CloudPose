@@ -52,21 +52,44 @@ CloudPose/
 
 ### Local Development
 
-1. Install dependencies:
+The published Oracle VM backend is not required. Run the API on this machine, then point the React app at `http://localhost:60000`.
+
+1. Create a virtualenv and install dependencies:
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r app/requirements.txt
 ```
 
-2. Run the service locally:
+2. Run the service locally (loads `app/yolov8n-pose.pt`):
 ```bash
 python app/app.py
 ```
 
-3. Test the API:
+Or use the helper script:
 ```bash
-curl -X POST "http://localhost:60000/api/pose" \
-  -H "Content-Type: application/json" \
-  -d '{"image": "base64_encoded_image", "id": "test-123"}'
+chmod +x run-local.sh
+./run-local.sh
+```
+
+3. Health check and API docs:
+```bash
+curl http://localhost:60000/health
+# Swagger UI: http://localhost:60000/docs
+```
+
+4. Test pose estimation (replace the image path):
+```bash
+python - <<'PY'
+import base64, json, pathlib, urllib.request
+img = base64.b64encode(pathlib.Path("samples/person.jpg").read_bytes()).decode()
+req = urllib.request.Request(
+    "http://localhost:60000/api/pose",
+    data=json.dumps({"image": img, "id": "test-123", "file_name": "person.jpg"}).encode(),
+    headers={"Content-Type": "application/json"},
+)
+print(urllib.request.urlopen(req).read().decode())
+PY
 ```
 
 ### Frontend Development
@@ -77,15 +100,17 @@ cd frontend
 npm install
 ```
 
-2. Start the React development server:
+2. The UI reads `REACT_APP_API_URL` (default `http://localhost:60000`). Copy the example env if you need to override it:
+```bash
+cp ../.env.example .env.local
+```
+
+3. Start the React development server:
 ```bash
 npm start
 ```
 
-3. Open your browser:
-Navigate to `http://localhost:3000`
-
-4. Upload an image and test both endpoints through the UI!
+4. Open `http://localhost:3000`, upload an image, and try **Get Keypoints** and **Get Annotated Image**.
 
 ### Docker Build
 
@@ -189,6 +214,10 @@ Returns an annotated image with keypoints drawn.
 
 ### Environment Variables
 
+- `PORT`: API listen port (default: `60000` locally, `80` in Docker)
+- `YOLO_MODEL_PATH`: Optional override for the YOLOv8 pose weights
+- `CORS_ORIGINS`: Comma-separated browser origins, or `*` to allow all
+- `REACT_APP_API_URL`: Frontend API base URL (default: `http://localhost:60000`)
 - `SERVICE_URL`: Target URL for load testing (default: http://207.211.146.57:30080)
 - `IMAGE_DIR`: Directory containing test images (default: "image")
 
