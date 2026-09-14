@@ -74,3 +74,21 @@ variable "cors_origins" {
   description = "Value for the API CORS_ORIGINS env var."
   default     = "*"
 }
+
+variable "enable_github_actions_deploy" {
+  type        = bool
+  description = "Create the GitHub Actions OIDC IAM role and EKS access entry used by deploy-eks.yml."
+  default     = true
+}
+
+variable "github_repository" {
+  type        = string
+  description = "GitHub org/repo allowed to assume the deploy role (e.g. imhero2k/CloudPose)."
+  default     = "imhero2k/CloudPose"
+}
+
+variable "github_oidc_provider_arn" {
+  type        = string
+  description = "Existing GitHub OIDC provider ARN. Leave null to create one."
+  default     = null
+}

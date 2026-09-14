@@ -7,4 +7,6 @@ namespace           = "cloudpose"
 api_replicas        = 1
 api_cpu             = "1"
 api_memory          = "2Gi"
-image_tag           = "latest"
+image_tag                  = "latest"
+github_repository          = "imhero2k/CloudPose"
+enable_github_actions_deploy = true

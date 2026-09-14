@@ -147,6 +147,8 @@ terraform apply -target=aws_eks_cluster.this -target=aws_eks_node_group.this \
 terraform apply
 ```
 
+After the cluster exists, merges to `master` deploy via [`.github/workflows/deploy-eks.yml`](./.github/workflows/deploy-eks.yml). Set secret `AWS_GHA_ROLE_ARN` to `terraform output github_actions_role_arn` and create a GitHub Environment named `eks`. See [`terraform/README.md`](./terraform/README.md).
+
 ### Docker Build
 
 ```bash
