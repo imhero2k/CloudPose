@@ -1,302 +1,457 @@
-# CloudPose - FIT5225 Assignment 1
+# CloudPose
 
-A containerized pose estimation web service deployed on Kubernetes in Oracle Cloud Infrastructure (OCI).
+CloudPose is a full-stack pose-estimation application built with FastAPI, YOLOv8, React, Docker, Kubernetes, and Amazon EKS. Upload an image to receive either structured pose keypoints or a JPEG annotated with detected people and body landmarks.
 
-## Project Overview
+## Contents
 
-CloudPose is a RESTful API service that performs pose estimation on images using YOLOv8. The service is containerized with Docker and deployed on a Kubernetes cluster in OCI. It provides two endpoints:
-- `/api/pose` - Returns JSON with detected keypoints
-- `/api/pose/annotated` - Returns an annotated image with keypoints drawn
+- [Product](#product)
+- [Architecture](#architecture)
+- [Quick start](#quick-start)
+- [API](#api)
+- [Testing](#testing)
+- [Docker](#docker)
+- [Amazon EKS](#amazon-eks)
+- [Continuous integration and deployment](#continuous-integration-and-deployment)
+- [Load testing](#load-testing)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+- [Project structure](#project-structure)
+
+## Product
+
+CloudPose provides:
+
+- `POST /api/pose` — bounding boxes, keypoint coordinates, confidence values, and processing time
+- `POST /api/pose/annotated` — a base64-encoded JPEG with boxes and landmarks
+- `GET /health` — API and model configuration health information
+- `/docs` — interactive OpenAPI/Swagger documentation
+- A React UI for image upload, JSON results, and annotated-image display
+
+The default `yolov8n-pose.pt` weights are included under `app/`.
 
 ## Architecture
 
-- **Web Service**: FastAPI-based REST API
-- **Model**: YOLOv8 pose estimation model
-- **Containerization**: Docker
-- **Orchestration**: Kubernetes cluster on OCI
-- **Load Testing**: Locust for performance testing
-
-## Repository Structure
-
-```
-CloudPose/
-├── app/                     # Main application code
-│   ├── app.py              # FastAPI web service
-│   └── requirements.txt    # Python dependencies
-├── frontend/               # React frontend application
-│   ├── src/                # React source code
-│   ├── public/             # Static files
-│   └── package.json        # Frontend dependencies
-├── k8s/                    # Kubernetes configurations
-│   ├── deployment.yaml     # Pod deployment configuration
-│   └── service.yaml        # Service configuration
-├── load-testing/           # Load testing scripts
-│   ├── locustfile.py       # Locust test scenarios
-│   └── Automation.py       # Automated experiment runner
-├── docker/                 # Docker configuration
-│   └── Dockerfile          # Container definition
-├── docs/                   # Documentation
-│   └── README.md           # This file
-└── README.md               # Main README
+```text
+Browser
+   |
+   v
+AWS Network Load Balancer :80
+   |
+   v
+React + nginx Deployment
+   |-- /              -> static React application
+   |-- /api/*         -> pose-estimator-service
+   |-- /health,/docs  -> pose-estimator-service
+                         |
+                         v
+                 FastAPI + YOLOv8 Deployment
 ```
 
-## Quick Start
+Terraform creates the VPC, EKS cluster, managed nodes, ECR repositories, Kubernetes workloads, load balancer, and GitHub Actions OIDC deployment role.
+
+## Quick start
 
 ### Prerequisites
 
-- Python 3.9+
-- Node.js (v14 or higher) - for frontend
-- Docker
-- Kubernetes cluster (OCI)
-- Locust (for load testing)
+- Python 3.11 or 3.12
+- Node.js 20 and npm
+- Git
 
-### Local Development
+For containers and AWS deployment:
 
-The published Oracle VM backend is not required. Run the API on this machine, then point the React app at `http://localhost:60000`.
+- Docker with Compose
+- Terraform 1.5+
+- AWS CLI v2
+- `kubectl`
 
-1. Create a virtualenv and install dependencies:
+### Clone and configure
+
+```bash
+git clone https://github.com/imhero2k/CloudPose.git
+cd CloudPose
+```
+
+See `.env.example` for supported runtime variables. Export them in your shell or place frontend variables in `frontend/.env.local`.
+
+### Run the API
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install --upgrade pip
 pip install -r app/requirements.txt
-```
-
-2. Run the service locally (loads `app/yolov8n-pose.pt`):
-```bash
 python app/app.py
 ```
 
-Or use the helper script:
+Or:
+
 ```bash
-chmod +x run-local.sh
 ./run-local.sh
 ```
 
-3. Health check and API docs:
+Verify it:
+
 ```bash
 curl http://localhost:60000/health
-# Swagger UI: http://localhost:60000/docs
 ```
 
-4. Test pose estimation (replace the image path):
-```bash
-python - <<'PY'
-import base64, json, pathlib, urllib.request
-img = base64.b64encode(pathlib.Path("samples/person.jpg").read_bytes()).decode()
-req = urllib.request.Request(
-    "http://localhost:60000/api/pose",
-    data=json.dumps({"image": img, "id": "test-123", "file_name": "person.jpg"}).encode(),
-    headers={"Content-Type": "application/json"},
-)
-print(urllib.request.urlopen(req).read().decode())
-PY
-```
+Swagger UI is available at <http://localhost:60000/docs>.
 
-### Frontend Development
+### Run the frontend
 
-1. Install frontend dependencies:
+In another terminal:
+
 ```bash
 cd frontend
-npm install
-```
-
-2. The UI reads `REACT_APP_API_URL` (default `http://localhost:60000`). Copy the example env if you need to override it:
-```bash
-cp ../.env.example .env.local
-```
-
-3. Start the React development server:
-```bash
+npm ci
 npm start
 ```
 
-4. Open `http://localhost:3000/CloudPose`, upload an image, and try **Get Keypoints** and **Get Annotated Image**.
+Open <http://localhost:3000/CloudPose>. The development frontend uses `http://localhost:60000` unless `REACT_APP_API_URL` overrides it.
 
-### Tests
+### Smoke-test pose estimation
 
-API unit tests mock YOLOv8 so they do not need Torch or the `.pt` weights:
+With the API running:
+
+```bash
+python - <<'PY'
+import base64
+import json
+from pathlib import Path
+from urllib.request import Request, urlopen
+
+image = base64.b64encode(Path("samples/person.jpg").read_bytes()).decode()
+request = Request(
+    "http://localhost:60000/api/pose",
+    data=json.dumps({
+        "id": "smoke-test",
+        "image": image,
+        "file_name": "person.jpg"
+    }).encode(),
+    headers={"Content-Type": "application/json"},
+)
+print(urlopen(request, timeout=120).read().decode())
+PY
+```
+
+## API
+
+### Request body
+
+Both pose endpoints accept:
+
+```json
+{
+  "id": "optional-request-id",
+  "image": "base64-encoded-image-or-data-url",
+  "file_name": "person.jpg"
+}
+```
+
+`id` and `file_name` are optional. Invalid images return HTTP `400`; malformed request bodies return HTTP `422`.
+
+### Keypoints response
+
+```json
+{
+  "id": "request-id",
+  "count": 1,
+  "boxes": [
+    {
+      "x": 320.0,
+      "y": 240.0,
+      "width": 180.0,
+      "height": 400.0,
+      "probability": 0.95
+    }
+  ],
+  "keypoints": [
+    [[100.0, 80.0, 0.98]]
+  ],
+  "processing_time": "0.15s",
+  "file_name": "person.jpg"
+}
+```
+
+### Annotated response
+
+```json
+{
+  "id": "request-id",
+  "image": "base64-encoded-jpeg",
+  "file_name": "person.jpg",
+  "message": "Pose annotated successfully"
+}
+```
+
+## Testing
+
+### Complete local gate
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
-pytest
-```
-
-Frontend tests:
-
-```bash
-cd frontend
-npm ci
-CI=true npm test -- --watchAll=false
-```
-
-GitHub Actions workflow `.github/workflows/ci.yml` is the **pre-merge gate** (pytest on 3.11/3.12, frontend test + production build, Terraform, Hadolint, actionlint, Compose, frontend image build). It runs on pull requests and pushes.
-
-Run the same fast subset locally before `git push`:
-
-```bash
-chmod +x scripts/pre-push.sh scripts/install-git-hooks.sh
-./scripts/install-git-hooks.sh   # installs .git/hooks/pre-push
+cd frontend && npm ci && cd ..
 ./scripts/pre-push.sh
 ```
 
-### Amazon EKS
-
-Terraform under `terraform/` stands up EKS, ECR, the pose API, and an nginx frontend with an NLB. See [`terraform/README.md`](./terraform/README.md).
+Install it as a Git pre-push hook:
 
 ```bash
+./scripts/install-git-hooks.sh
+```
+
+The local gate checks Python syntax, pytest, Jest, Terraform formatting/validation, and Docker Compose when the relevant tools are installed.
+
+### Individual suites
+
+```bash
+# API, infrastructure, and workflow tests (YOLO is mocked)
+pytest -q
+
+# Frontend
+cd frontend
+CI=true npm test -- --watchAll=false
+REACT_APP_API_URL=/ PUBLIC_URL=/ npm run build
+
+# Terraform
+terraform -chdir=terraform fmt -check -recursive
+terraform -chdir=terraform init -backend=false
+terraform -chdir=terraform validate
+```
+
+## Docker
+
+### API only
+
+```bash
+docker build -f docker/Dockerfile -t cloudpose-api:local .
+docker run --rm -p 60000:80 cloudpose-api:local
+```
+
+### Docker Compose
+
+```bash
+docker compose up --build
+curl http://localhost:60000/health
+docker compose down
+```
+
+### Frontend image
+
+```bash
+docker build -f docker/Dockerfile.frontend -t cloudpose-frontend:local .
+```
+
+The production frontend runs under nginx. It calls `/api` on the same origin; nginx proxies those requests to `pose-estimator-service`.
+
+## Amazon EKS
+
+> EKS, EC2, ECR, and the load balancer incur AWS charges.
+
+### 1. Configure AWS
+
+```bash
+aws configure
+aws sts get-caller-identity
 cd terraform
 cp terraform.tfvars.example terraform.tfvars
+```
+
+Review `terraform.tfvars`. Defaults use:
+
+- Region `ap-southeast-2`
+- EKS 1.31
+- Two `t3.large` nodes
+- API requests/limits of 1 vCPU and 2 GiB
+- Kubernetes namespace `cloudpose`
+
+### 2. Create the cluster and registries
+
+Kubernetes resources require the EKS API to exist, so the initial setup is two-stage:
+
+```bash
 terraform init
-terraform apply -target=aws_eks_cluster.this -target=aws_eks_node_group.this \
-  -target=aws_ecr_repository.api -target=aws_ecr_repository.frontend
+terraform apply \
+  -target=aws_eks_cluster.this \
+  -target=aws_eks_node_group.this \
+  -target=aws_ecr_repository.api \
+  -target=aws_ecr_repository.frontend
+```
+
+### 3. Push initial images
+
+```bash
 ../scripts/push-ecr.sh
+```
+
+### 4. Deploy workloads
+
+```bash
 terraform apply
+aws eks update-kubeconfig \
+  --region "$(terraform output -raw region)" \
+  --name "$(terraform output -raw cluster_name)"
+kubectl -n cloudpose get pods,svc
+terraform output load_balancer_hostname
 ```
 
-After the cluster exists, merges to `master` deploy via [`.github/workflows/deploy-eks.yml`](./.github/workflows/deploy-eks.yml). Set secret `AWS_GHA_ROLE_ARN` to `terraform output github_actions_role_arn` and create a GitHub Environment named `eks`. See [`terraform/README.md`](./terraform/README.md).
+Open `http://<load_balancer_hostname>/`.
 
-### Docker Build
+### Destroy the environment
 
 ```bash
-docker build -f docker/Dockerfile -t cloudpose:latest .
+terraform destroy
 ```
 
-### Kubernetes Deployment
+ECR repositories use `force_delete`; destroying the stack also removes stored images.
 
-1. Apply the deployment:
+See [`terraform/README.md`](terraform/README.md) for infrastructure-specific details.
+
+## Continuous integration and deployment
+
+### Pre-merge checks
+
+`.github/workflows/ci.yml` runs on pull requests and pushes:
+
+- pytest on Python 3.11 and 3.12
+- Python compilation checks
+- Jest tests and a production React build
+- Terraform format and validation
+- Hadolint, ShellCheck, actionlint, and Compose validation
+- Production frontend container build and nginx configuration check
+- A final `Pre-merge gate` that fails unless every required job succeeds
+
+Protect `master` in GitHub and require **Pre-merge gate** before merging.
+
+### Deploy after merge
+
+`.github/workflows/deploy-eks.yml` runs after code reaches `master`:
+
+1. Re-runs API, frontend, and Terraform checks
+2. Assumes an AWS IAM role via GitHub OIDC (no long-lived AWS keys)
+3. Builds immutable API and frontend images tagged with the commit SHA
+4. Pushes SHA and `latest` tags to ECR
+5. Updates both EKS Deployments
+6. Waits for Kubernetes rollout completion and prints the public URL
+
+#### One-time GitHub setup
+
+After `terraform apply`:
+
 ```bash
-kubectl apply -f k8s/deployment.yaml
+terraform output -raw github_actions_role_arn
 ```
 
-2. Apply the service:
-```bash
-kubectl apply -f k8s/service.yaml
-```
+Configure [repository Actions settings](https://github.com/imhero2k/CloudPose/settings/secrets/actions):
 
-3. Check deployment status:
-```bash
-kubectl get pods -n assignment1
-kubectl get services -n assignment1
-```
+| Kind | Name | Value |
+|---|---|---|
+| Secret | `AWS_GHA_ROLE_ARN` | Terraform output above |
+| Variable (optional) | `AWS_REGION` | `ap-southeast-2` |
+| Variable (optional) | `EKS_CLUSTER_NAME` | `cloudpose` |
+| Variable (optional) | `K8S_NAMESPACE` | `cloudpose` |
+| Variable (optional) | `ECR_API_NAME` | `cloudpose-api` |
+| Variable (optional) | `ECR_FRONTEND_NAME` | `cloudpose-frontend` |
 
-### Load Testing
+Create a GitHub Environment named **`eks`**. Add required reviewers if production deployment should require approval.
 
-1. Install Locust:
+The OIDC trust policy allows only this repository's `master` branch and `eks` environment.
+
+## Load testing
+
 ```bash
+source .venv/bin/activate
 pip install locust
+IMAGE_DIR=samples locust \
+  -f load-testing/locustfile.py \
+  --host=http://localhost:60000
 ```
 
-2. Run load tests:
-```bash
-locust -f load-testing/locustfile.py --host=http://your-service-url
-```
+Open <http://localhost:8089> to configure users and spawn rate.
 
-3. Run automated experiments:
-```bash
-python load-testing/Automation.py
-```
-
-## API Endpoints
-
-### POST /api/pose
-
-Returns JSON with detected pose keypoints.
-
-**Request:**
-```json
-{
-  "id": "unique-request-id",
-  "image": "base64_encoded_image",
-  "file_name": "image.jpg"
-}
-```
-
-**Response:**
-```json
-{
-  "id": "unique-request-id",
-  "count": 1,
-  "boxes": [
-    {
-      "x": 100.0,
-      "y": 200.0,
-      "width": 150.0,
-      "height": 300.0,
-      "probability": 0.95
-    }
-  ],
-  "keypoints": [
-    [
-      [x1, y1, confidence1],
-      [x2, y2, confidence2],
-      ...
-    ]
-  ],
-  "processing_time": "0.15s",
-  "file_name": "image.jpg"
-}
-```
-
-### POST /api/pose/annotated
-
-Returns an annotated image with keypoints drawn.
-
-**Request:** Same as `/api/pose`
-
-**Response:**
-```json
-{
-  "id": "unique-request-id",
-  "image": "base64_encoded_annotated_image",
-  "file_name": "image.jpg",
-  "message": "Pose annotated successfully"
-}
-```
+For EKS, use the load balancer URL as `--host`. Do not run uncontrolled load against shared or production infrastructure.
 
 ## Configuration
 
-### Environment Variables
+| Variable | Component | Default | Purpose |
+|---|---|---|---|
+| `PORT` | API | `60000` local / `80` container | HTTP listen port |
+| `YOLO_MODEL_PATH` | API | `app/yolov8n-pose.pt` | Model weights |
+| `CORS_ORIGINS` | API | Local/GitHub Pages origins | Comma-separated origins or `*` |
+| `REACT_APP_API_URL` | Frontend | `http://localhost:60000` | API origin; `/` in EKS |
+| `IMAGE_DIR` | Locust | `image` | Test image directory |
+| `IMAGE_TAG` | ECR helper | `latest` | Image tag pushed by `push-ecr.sh` |
 
-- `PORT`: API listen port (default: `60000` locally, `80` in Docker)
-- `YOLO_MODEL_PATH`: Optional override for the YOLOv8 pose weights
-- `CORS_ORIGINS`: Comma-separated browser origins, or `*` to allow all
-- `REACT_APP_API_URL`: Frontend API base URL (default: `http://localhost:60000`)
-- `SERVICE_URL`: Target URL for load testing (default: http://207.211.146.57:30080)
-- `IMAGE_DIR`: Directory containing test images (default: "image")
-
-### Kubernetes Resources
-
-- CPU Request/Limit: 0.5 cores
-- Memory Request/Limit: 512MiB
-- Port: 80 (container), 30080 (NodePort)
-
-## Performance Testing
-
-The system has been tested with varying numbers of pods (1, 2, 4, 8) and concurrent users to determine optimal performance characteristics.
-
-### Test Results
-
-Results are stored in `load-testing/remote_results/experiment_results.csv` and include:
-- Maximum concurrent users before failure
-- Average response time
-- Success rate
+Terraform inputs are documented in `terraform/variables.tf` and `terraform/terraform.tfvars.example`.
 
 ## Troubleshooting
 
-### Common Issues
-
-1. **Pod startup failures**: Check resource limits and image availability
-2. **Service connectivity**: Verify NodePort configuration and firewall rules
-3. **Load testing failures**: Ensure test images are available and service is accessible
-
-### Logs
+### Frontend cannot reach the API
 
 ```bash
-# Pod logs
-kubectl logs -f deployment/pose-estimator -n assignment1
-
-# Service logs
-kubectl describe service pose-estimator-service -n assignment1
+curl http://localhost:60000/health
 ```
+
+Check `REACT_APP_API_URL` and restart the React dev server after changing it. In EKS, confirm both services exist:
+
+```bash
+kubectl -n cloudpose get svc
+```
+
+### Pods fail to start
+
+```bash
+kubectl -n cloudpose get pods
+kubectl -n cloudpose describe pod <pod-name>
+kubectl -n cloudpose logs deployment/pose-estimator
+```
+
+Typical causes are missing ECR images, insufficient memory, ECR permissions, or a failed health probe. The recommended API allocation is at least 2 GiB.
+
+### GitHub deployment cannot assume AWS role
+
+- Confirm `AWS_GHA_ROLE_ARN` exactly matches `terraform output -raw github_actions_role_arn`
+- Confirm the GitHub environment is named `eks`
+- Confirm `github_repository = "imhero2k/CloudPose"` in Terraform
+- Reapply Terraform after changing OIDC inputs
+
+### Deployment cannot access Kubernetes
+
+```bash
+aws eks describe-cluster --name cloudpose --region ap-southeast-2
+aws eks update-kubeconfig --name cloudpose --region ap-southeast-2
+```
+
+Ensure the OIDC role has an `aws_eks_access_entry` and `AmazonEKSEditPolicy` association for the `cloudpose` namespace.
+
+## Project structure
+
+```text
+CloudPose/
+├── app/                         FastAPI application and YOLO weights
+├── docker/                      API/frontend Dockerfiles and nginx config
+├── frontend/                    React application
+├── k8s/                         Standalone Kubernetes manifests
+├── load-testing/                Locust and experiment automation
+├── samples/                     Local smoke-test image
+├── scripts/                     ECR, pre-push, and Git hook helpers
+├── terraform/                   EKS/ECR/VPC/IAM/Kubernetes IaC
+├── tests/                       API, workflow, manifest, and IaC tests
+├── .github/workflows/ci.yml     Pre-merge quality gate
+└── .github/workflows/deploy-eks.yml
+                                Merge-to-master EKS deployment
+```
+
+## Security notes
+
+- Never commit AWS access keys, kubeconfigs, `.tfvars`, or Terraform state.
+- CI uses short-lived GitHub OIDC credentials.
+- Restrict CORS in production instead of leaving `CORS_ORIGINS=*`.
+- Add HTTPS and a custom domain before exposing sensitive images.
+- ECR image scanning is enabled by Terraform.
+
+## License and attribution
+
+CloudPose was developed for FIT5225 Cloud Computing. Pose inference uses [Ultralytics YOLOv8](https://docs.ultralytics.com/), subject to its licensing terms.
