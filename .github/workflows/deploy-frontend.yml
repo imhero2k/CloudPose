@@ -27,6 +27,13 @@ jobs:
       run: |
         cd frontend
         npm ci
+
+    - name: Run tests
+      working-directory: frontend
+      env:
+        CI: true
+        REACT_APP_API_URL: http://localhost:60000
+      run: npm test -- --watchAll=false
         
     - name: Build frontend
       run: |

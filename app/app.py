@@ -11,7 +11,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from ultralytics import YOLO
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.getenv("YOLO_MODEL_PATH", os.path.join(APP_DIR, "yolov8n-pose.pt"))
@@ -51,7 +50,17 @@ app.add_middleware(
 )
 
 logger = logging.getLogger("uvicorn")
-model = YOLO(MODEL_PATH)
+_model = None
+
+
+def get_model():
+    """Load YOLOv8 once. Lazy so unit tests can mock inference without Torch."""
+    global _model
+    if _model is None:
+        from ultralytics import YOLO
+
+        _model = YOLO(MODEL_PATH)
+    return _model
 
 
 class PoseRequest(BaseModel):
@@ -66,8 +75,15 @@ def decode_image(image_b64: str) -> Optional[np.ndarray]:
         img_bytes = base64.b64decode(img_b64, validate=False)
     except Exception:
         return None
+    if not img_bytes:
+        return None
     nparr = np.frombuffer(img_bytes, np.uint8)
-    return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if nparr.size == 0:
+        return None
+    try:
+        return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    except cv2.error:
+        return None
 
 
 def extract_detections(result):
@@ -135,7 +151,7 @@ async def pose_estimation(request: PoseRequest):
                 status_code=400,
             )
 
-        result = model(img)[0]
+        result = get_model()(img)[0]
         boxes, keypoints = extract_detections(result)
         processing_time = time.time() - start_time
         return JSONResponse(
@@ -166,7 +182,7 @@ async def annotated_pose(request: PoseRequest):
                 status_code=400,
             )
 
-        result = model(img)[0]
+        result = get_model()(img)[0]
         annotated = annotate_image(img, result)
         _, buffer = cv2.imencode(".jpg", annotated)
         img_base64 = base64.b64encode(buffer).decode("utf-8")

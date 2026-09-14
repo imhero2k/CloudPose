@@ -110,7 +110,28 @@ cp ../.env.example .env.local
 npm start
 ```
 
-4. Open `http://localhost:3000`, upload an image, and try **Get Keypoints** and **Get Annotated Image**.
+4. Open `http://localhost:3000/CloudPose`, upload an image, and try **Get Keypoints** and **Get Annotated Image**.
+
+### Tests
+
+API unit tests mock YOLOv8 so they do not need Torch or the `.pt` weights:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+pytest
+```
+
+Frontend tests:
+
+```bash
+cd frontend
+npm ci
+CI=true npm test -- --watchAll=false
+```
+
+GitHub Actions workflow `.github/workflows/ci.yml` runs both suites on pushes and pull requests.
 
 ### Docker Build
 
