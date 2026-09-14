@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import './App.css';
 
-const API_BASE = (process.env.REACT_APP_API_URL || 'http://localhost:60000').replace(/\/$/, '');
+// Empty or "/" means same-origin (EKS nginx proxies /api). Unset defaults to local API.
+const API_BASE = (
+  process.env.REACT_APP_API_URL === undefined
+    ? 'http://localhost:60000'
+    : process.env.REACT_APP_API_URL
+).replace(/\/$/, '')
 
 function App() {
   const [selectedImage, setSelectedImage] = useState(null);
