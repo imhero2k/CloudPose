@@ -130,7 +130,12 @@ jobs:
           cache-from: type=gha,scope=cloudpose-frontend-ci
           cache-to: type=gha,mode=max,scope=cloudpose-frontend-ci
       - name: Smoke nginx config in image
-        run: docker run --rm cloudpose-frontend:ci nginx -t
+        # The real Kubernetes Service provides this DNS name. Supply it in the
+        # isolated CI container so nginx can resolve the upstream during -t.
+        run: >-
+          docker run --rm
+          --add-host pose-estimator-service:127.0.0.1
+          cloudpose-frontend:ci nginx -t
 
   pre-merge-gate:
     name: Pre-merge gate

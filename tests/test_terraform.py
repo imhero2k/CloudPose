@@ -53,4 +53,16 @@ def test_pre_merge_workflow_covers_required_gates():
     assert "hadolint" in workflow
     assert "actionlint" in workflow
     assert "docker/Dockerfile.frontend" in workflow
+    assert "--add-host pose-estimator-service:127.0.0.1" in workflow
     assert (ROOT / "scripts" / "pre-push.sh").is_file()
+
+
+def test_deploy_workflows_use_current_actions_and_clear_aws_preflight():
+    eks = (ROOT / ".github" / "workflows" / "deploy-eks.yml").read_text()
+    pages = (ROOT / ".github" / "workflows" / "deploy-frontend.yml").read_text()
+    assert "Missing AWS_GHA_ROLE_ARN" in eks
+    assert "environment: eks" in eks
+    assert "actions/checkout@v3" not in pages
+    assert "actions/setup-node@v3" not in pages
+    assert "peaceiris/actions-gh-pages@v3" not in pages
+    assert "contents: write" in pages
