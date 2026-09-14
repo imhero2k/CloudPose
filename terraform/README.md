@@ -53,6 +53,22 @@ terraform output load_balancer_hostname
 
 Open `http://<load_balancer_hostname>/`. The UI posts to `/api/pose` on the same host.
 
+## GitHub Actions deploy (after merge to master)
+
+`.github/workflows/deploy-eks.yml` runs tests, builds both images, pushes them to ECR, and rolls out the EKS deployments whenever `master` is updated.
+
+1. Apply Terraform so the GitHub OIDC role exists:
+   ```bash
+   terraform output github_actions_role_arn
+   ```
+2. In the GitHub repo: **Settings → Environments → New environment → `eks`**.
+3. **Settings → Secrets and variables → Actions**
+   - Secret `AWS_GHA_ROLE_ARN` = the output from step 1
+   - Optional variables: `AWS_REGION`, `EKS_CLUSTER_NAME`, `K8S_NAMESPACE` (defaults: `ap-southeast-2`, `cloudpose`, `cloudpose`)
+4. Merge to `master`. The workflow assumes the IAM role, pushes `<account>.dkr.ecr.<region>.amazonaws.com/cloudpose-api:<sha>` (and frontend), then `kubectl set image` + `rollout status`.
+
+The IAM role trust is limited to `repo:<github_repository>:ref:refs/heads/master` and the `eks` environment.
+
 ## Destroy
 
 ```bash

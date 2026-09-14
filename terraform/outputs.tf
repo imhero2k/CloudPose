@@ -22,6 +22,11 @@ output "configure_kubectl" {
   value = "aws eks update-kubeconfig --region ${var.aws_region} --name ${aws_eks_cluster.this.name}"
 }
 
+output "github_actions_role_arn" {
+  description = "Set this as GitHub Actions secret AWS_GHA_ROLE_ARN."
+  value       = try(aws_iam_role.gha_deploy[0].arn, null)
+}
+
 output "load_balancer_hostname" {
   description = "Public NLB for the CloudPose UI (proxies /api to the pose service)."
   value       = try(kubernetes_service_v1.frontend.status[0].load_balancer[0].ingress[0].hostname, null)
