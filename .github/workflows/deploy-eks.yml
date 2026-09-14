@@ -86,6 +86,7 @@ jobs:
     name: Build and push ECR images
     needs: [api-tests, frontend-tests, terraform]
     runs-on: ubuntu-latest
+    environment: eks
     timeout-minutes: 60
     outputs:
       image_tag: ${{ steps.meta.outputs.tag }}
@@ -103,6 +104,15 @@ jobs:
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
+      - name: Verify AWS deployment configuration
+        env:
+          ROLE_ARN: ${{ secrets.AWS_GHA_ROLE_ARN }}
+        run: |
+          if [ -z "$ROLE_ARN" ]; then
+            echo "::error::Missing AWS_GHA_ROLE_ARN. Apply terraform/ and add its github_actions_role_arn output as a repository or environment secret."
+            exit 1
+          fi
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -119,10 +129,12 @@ jobs:
         run: |
           REGISTRY="${{ steps.ecr.outputs.registry }}"
           TAG="${{ steps.meta.outputs.tag }}"
-          echo "api_image=${REGISTRY}/${{ env.ECR_API_NAME }}:${TAG}" >> "$GITHUB_OUTPUT"
-          echo "frontend_image=${REGISTRY}/${{ env.ECR_FRONTEND_NAME }}:${TAG}" >> "$GITHUB_OUTPUT"
-          echo "api_latest=${REGISTRY}/${{ env.ECR_API_NAME }}:latest" >> "$GITHUB_OUTPUT"
-          echo "frontend_latest=${REGISTRY}/${{ env.ECR_FRONTEND_NAME }}:latest" >> "$GITHUB_OUTPUT"
+          {
+            echo "api_image=${REGISTRY}/${{ env.ECR_API_NAME }}:${TAG}"
+            echo "frontend_image=${REGISTRY}/${{ env.ECR_FRONTEND_NAME }}:${TAG}"
+            echo "api_latest=${REGISTRY}/${{ env.ECR_API_NAME }}:latest"
+            echo "frontend_latest=${REGISTRY}/${{ env.ECR_FRONTEND_NAME }}:latest"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -157,6 +169,15 @@ jobs:
     environment: eks
     timeout-minutes: 20
     steps:
+      - name: Verify AWS deployment configuration
+        env:
+          ROLE_ARN: ${{ secrets.AWS_GHA_ROLE_ARN }}
+        run: |
+          if [ -z "$ROLE_ARN" ]; then
+            echo "::error::Missing AWS_GHA_ROLE_ARN in the eks GitHub environment."
+            exit 1
+          fi
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:

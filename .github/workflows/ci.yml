@@ -1,30 +1,47 @@
-name: CI
+name: Pre-merge checks
 
 on:
+  pull_request:
   push:
     branches: [master, develop, "cursor/**"]
-  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: pre-merge-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   api-tests:
-    name: API unit tests
+    name: API tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
+      - name: Compile Python sources
+        run: |
+          python -m py_compile app/app.py
+          python -m py_compile load-testing/locustfile.py
+          python -m py_compile load-testing/Automation.py
       - name: Run pytest
-        run: pytest
+        run: pytest -q
 
   frontend-tests:
-    name: Frontend unit tests
+    name: Frontend unit tests and production build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -38,11 +55,17 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
         run: npm ci
-      - name: Run tests
+      - name: Unit tests
         run: npm test -- --watchAll=false
         env:
           CI: true
           REACT_APP_API_URL: http://localhost:60000
+      - name: Production build
+        run: npm run build
+        env:
+          CI: true
+          REACT_APP_API_URL: /
+          PUBLIC_URL: /
 
   terraform:
     name: Terraform fmt and validate
@@ -61,3 +84,76 @@ jobs:
         run: terraform init -backend=false
       - name: terraform validate
         run: terraform validate
+
+  lint:
+    name: Dockerfile, Compose, workflows, and shell
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hadolint API Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/Dockerfile
+          failure-threshold: error
+      - name: Hadolint frontend Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/Dockerfile.frontend
+          failure-threshold: error
+      - name: Docker Compose config
+        run: docker compose -f docker-compose.yml config --quiet
+      - name: ShellCheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y shellcheck
+          shellcheck --severity=error scripts/*.sh run-local.sh
+      - name: actionlint
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
+
+  docker-frontend:
+    name: Build frontend container
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build nginx frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.frontend
+          push: false
+          load: true
+          tags: cloudpose-frontend:ci
+          cache-from: type=gha,scope=cloudpose-frontend-ci
+          cache-to: type=gha,mode=max,scope=cloudpose-frontend-ci
+      - name: Smoke nginx config in image
+        # The real Kubernetes Service provides this DNS name. Supply it in the
+        # isolated CI container so nginx can resolve the upstream during -t.
+        run: >-
+          docker run --rm
+          --add-host pose-estimator-service:127.0.0.1
+          cloudpose-frontend:ci nginx -t
+
+  pre-merge-gate:
+    name: Pre-merge gate
+    if: always()
+    needs:
+      - api-tests
+      - frontend-tests
+      - terraform
+      - lint
+      - docker-frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every check to pass
+        run: |
+          set -euo pipefail
+          test "${{ needs.api-tests.result }}" = "success"
+          test "${{ needs.frontend-tests.result }}" = "success"
+          test "${{ needs.terraform.result }}" = "success"
+          test "${{ needs.lint.result }}" = "success"
+          test "${{ needs.docker-frontend.result }}" = "success"
+          echo "All pre-merge checks passed"
