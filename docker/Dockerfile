@@ -17,5 +17,6 @@ RUN pip install --no-cache-dir -r requirements.txt \
 # Application setup
 COPY app/ /app/
 WORKDIR /app
+ENV PORT=80
 EXPOSE 80
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "80"]
+CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT}"]

@@ -2,6 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: cloudpose-ingress
+  namespace: assignment1
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.ingress.kubernetes.io/cors-allow-origin: "*"
@@ -16,7 +17,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: cloudpose-service
+            name: pose-estimator-service
             port:
               number: 80
   - host: api.cloudpose.yourdomain.com  # API subdomain
@@ -26,6 +27,6 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: cloudpose-service
+            name: pose-estimator-service
             port:
               number: 80 

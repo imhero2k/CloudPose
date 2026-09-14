@@ -1,0 +1,15 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "60000:80"
+    environment:
+      PORT: "80"
+      CORS_ORIGINS: "*"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:80/health')"]
+      interval: 20s
+      timeout: 5s
+      retries: 10

@@ -1,0 +1,8 @@
+.venv
+.git
+frontend/node_modules
+**/__pycache__
+*.md
+samples
+load-testing
+k8s

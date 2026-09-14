@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import './App.css';
 
+const API_BASE = (process.env.REACT_APP_API_URL || 'http://localhost:60000').replace(/\/$/, '');
+
 function App() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -37,6 +39,36 @@ function App() {
     });
   };
 
+  const postPose = async (path) => {
+    const base64Image = await convertToBase64(selectedImage);
+    const payload = {
+      id: crypto.randomUUID(),
+      image: base64Image,
+      file_name: selectedImage.name
+    };
+
+    const response = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      let detail = `HTTP error! status: ${response.status}`;
+      try {
+        const body = await response.json();
+        if (body.error) detail = body.error;
+      } catch {
+        // keep status text
+      }
+      throw new Error(detail);
+    }
+
+    return response.json();
+  };
+
   const sendPoseRequest = async () => {
     if (!selectedImage) {
       setError('Please select an image first');
@@ -47,26 +79,7 @@ function App() {
     setError(null);
 
     try {
-      const base64Image = await convertToBase64(selectedImage);
-      const payload = {
-        id: crypto.randomUUID(),
-        image: base64Image,
-        file_name: selectedImage.name
-      };
-
-      const response = await fetch('http://152.69.179.232:8000/api/pose', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = await postPose('/api/pose');
       setPoseData(data);
       setActiveTab('pose');
     } catch (err) {
@@ -86,26 +99,7 @@ function App() {
     setError(null);
 
     try {
-      const base64Image = await convertToBase64(selectedImage);
-      const payload = {
-        id: crypto.randomUUID(),
-        image: base64Image,
-        file_name: selectedImage.name
-      };
-
-      const response = await fetch('http://152.69.179.232:8000/api/pose/annotated', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = await postPose('/api/pose/annotated');
       if (data.image) {
         setAnnotatedImage(`data:image/jpeg;base64,${data.image}`);
       }
@@ -149,15 +143,15 @@ function App() {
 
           {selectedImage && (
             <div className="action-buttons">
-              <button 
-                onClick={sendPoseRequest} 
+              <button
+                onClick={sendPoseRequest}
                 disabled={loading}
                 className="btn btn-primary"
               >
                 {loading ? '🔄 Processing...' : '🔍 Get Keypoints'}
               </button>
-              <button 
-                onClick={sendAnnotatedRequest} 
+              <button
+                onClick={sendAnnotatedRequest}
                 disabled={loading}
                 className="btn btn-secondary"
               >
@@ -175,13 +169,13 @@ function App() {
 
         <div className="results-section">
           <div className="tab-buttons">
-            <button 
+            <button
               className={`tab-btn ${activeTab === 'pose' ? 'active' : ''}`}
               onClick={() => setActiveTab('pose')}
             >
               📊 Pose Data
             </button>
-            <button 
+            <button
               className={`tab-btn ${activeTab === 'annotated' ? 'active' : ''}`}
               onClick={() => setActiveTab('annotated')}
             >

@@ -60,10 +60,13 @@ The frontend connects to these backend endpoints:
 
 ### Backend URL
 
-The frontend is configured to connect to `http://localhost:60000` by default. To change this:
+The frontend reads `REACT_APP_API_URL` (default `http://localhost:60000` in development). To change this, set the variable in `frontend/.env.local` or `frontend/.env.development`:
 
-1. Edit `src/App.js`
-2. Update the fetch URLs in `sendPoseRequest()` and `sendAnnotatedRequest()`
+```
+REACT_APP_API_URL=http://localhost:60000
+```
+
+GitHub Pages / production builds should set `REACT_APP_API_URL` to the public API origin before `npm run build`.
 
 ### CORS
 
