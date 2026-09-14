@@ -118,3 +118,24 @@ def test_annotated_rejects_invalid_image(client):
     )
     assert response.status_code == 400
     assert response.json()["error"] == "Invalid image payload"
+
+
+def test_docs_and_openapi(client):
+    http, _ = client
+    assert http.get("/docs").status_code == 200
+    spec = http.get("/openapi.json")
+    assert spec.status_code == 200
+    paths = spec.json()["paths"]
+    assert "/api/pose" in paths
+    assert "/api/pose/annotated" in paths
+    assert "/health" in paths
+
+
+def test_pose_rejects_malformed_json(client):
+    http, _ = client
+    response = http.post(
+        "/api/pose",
+        content=b"not-json",
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 422

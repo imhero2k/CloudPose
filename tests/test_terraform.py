@@ -41,3 +41,16 @@ def test_deploy_eks_workflow_covers_build_and_rollout():
     assert "kubectl -n \"$NS\" set image" in workflow
     assert "rollout status" in workflow
     assert "AWS_GHA_ROLE_ARN" in workflow
+
+
+def test_pre_merge_workflow_covers_required_gates():
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    assert "pull_request:" in workflow
+    assert "Pre-merge gate" in workflow
+    assert "pytest -q" in workflow
+    assert "npm run build" in workflow
+    assert "terraform validate" in workflow
+    assert "hadolint" in workflow
+    assert "actionlint" in workflow
+    assert "docker/Dockerfile.frontend" in workflow
+    assert (ROOT / "scripts" / "pre-push.sh").is_file()

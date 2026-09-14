@@ -10,33 +10,31 @@ from locust import HttpUser, task, between
 # ─── Configuration ─────────────────────────────────────────────────────────────
 IMAGE_DIR = os.getenv("IMAGE_DIR", "image")
 
-# Optional: configure logging
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# ─── Preload Images ────────────────────────────────────────────────────────────
 encoded_images = []
-for entry in sorted(os.listdir(IMAGE_DIR)):
-    path = os.path.join(IMAGE_DIR, entry)
-    # skip directories
-    if os.path.isdir(path):
-        logger.debug(f"Skipping directory {path}")
-        continue
-
-    try:
-        with open(path, "rb") as img_file:
-            encoded = base64.b64encode(img_file.read()).decode("utf-8")
-            encoded_images.append(encoded)
-    except Exception as e:
-        logger.warning(f"Failed to load image {path}: {e}")
+if os.path.isdir(IMAGE_DIR):
+    for entry in sorted(os.listdir(IMAGE_DIR)):
+        path = os.path.join(IMAGE_DIR, entry)
+        if os.path.isdir(path):
+            logger.debug("Skipping directory %s", path)
+            continue
+        try:
+            with open(path, "rb") as img_file:
+                encoded_images.append(base64.b64encode(img_file.read()).decode("utf-8"))
+        except OSError as exc:
+            logger.warning("Failed to load image %s: %s", path, exc)
+else:
+    logger.error("Image directory `%s` does not exist", IMAGE_DIR)
 
 if not encoded_images:
-    logger.error(f"No images loaded from `{IMAGE_DIR}`; check that it exists and contains files.")
+    logger.error("No images loaded from `%s`; check that it exists and contains files.", IMAGE_DIR)
 else:
-    logger.info(f"Loaded {len(encoded_images)} images from `{IMAGE_DIR}`")
+    logger.info("Loaded %s images from `%s`", len(encoded_images), IMAGE_DIR)
 
 # ─── Locust User Class ─────────────────────────────────────────────────────────
 class APIUser(HttpUser):
@@ -44,6 +42,8 @@ class APIUser(HttpUser):
 
     @task(1)
     def upload_pose(self):
+        if not encoded_images:
+            return
         payload = {
             "image": random.choice(encoded_images),
             "file_name": f"img_{random.randint(1,128)}.jpg",
@@ -63,6 +63,8 @@ class APIUser(HttpUser):
 
     @task(1)
     def upload_annotated_pose(self):
+        if not encoded_images:
+            return
         payload = {
             "image": random.choice(encoded_images),
             "file_name": f"img_{random.randint(1,128)}.jpg",

@@ -131,7 +131,15 @@ npm ci
 CI=true npm test -- --watchAll=false
 ```
 
-GitHub Actions workflow `.github/workflows/ci.yml` runs both suites on pushes and pull requests.
+GitHub Actions workflow `.github/workflows/ci.yml` is the **pre-merge gate** (pytest on 3.11/3.12, frontend test + production build, Terraform, Hadolint, actionlint, Compose, frontend image build). It runs on pull requests and pushes.
+
+Run the same fast subset locally before `git push`:
+
+```bash
+chmod +x scripts/pre-push.sh scripts/install-git-hooks.sh
+./scripts/install-git-hooks.sh   # installs .git/hooks/pre-push
+./scripts/pre-push.sh
+```
 
 ### Amazon EKS
 
